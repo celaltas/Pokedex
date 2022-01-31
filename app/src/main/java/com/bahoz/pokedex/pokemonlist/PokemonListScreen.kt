@@ -1,16 +1,18 @@
 package com.bahoz.pokedex.pokemonlist
 
+import android.util.Log
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.GridCells
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,19 +30,23 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltNavGraphViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import coil.compose.ImagePainter
+import coil.compose.rememberImagePainter
+import coil.decode.DataSource
 import coil.request.ImageRequest
+import coil.transform.CircleCropTransformation
 import com.bahoz.pokedex.R
 import com.bahoz.pokedex.data.models.PokedexListEntry
 import com.bahoz.pokedex.ui.theme.RobotoCondensed
-import com.google.accompanist.coil.CoilImage
 
 
 @Composable
@@ -68,6 +74,9 @@ fun PokemonListScreen(
                     .fillMaxWidth()
                     .padding(16.dp)
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            PokemonList(navController = navController)
+
 
         }
     }
@@ -114,21 +123,62 @@ fun SearchBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PokemonList(
+    navController: NavController,
+    viewModel: PokemonListViewModel = hiltViewModel()
+) {
+    val pokemonList by remember { viewModel.pokemonList }
+    val endReached by remember { viewModel.endReached }
+    val isLoading by remember { viewModel.isLoading }
+    val loadError by remember { viewModel.loadError }
+
+    LazyVerticalGrid(
+        cells = GridCells.Fixed(2),
+        contentPadding = PaddingValues(12.dp),
+
+    ) {
+        items(pokemonList.size) {
+            PokedexEntry(
+                entry = pokemonList[it],
+                navController = navController,
+            )
+            if (it >= pokemonList.size - 1 && !endReached) {
+                viewModel.loadPokemonPaginated()
+            }
+        }
+    }
+
+    Box(
+        contentAlignment = Center,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(color = MaterialTheme.colors.primary)
+        }
+        if (loadError.isNotEmpty()) {
+            RetrySection(error = loadError) {
+                viewModel.loadPokemonPaginated()
+            }
+        }
+    }
+}
+
 @Composable
 fun PokedexEntry(
     entry: PokedexListEntry,
     navController: NavController,
     modifier: Modifier = Modifier,
-    viewModel: PokemonListViewModel = hiltNavGraphViewModel()
+    viewModel: PokemonListViewModel = hiltViewModel()
 ) {
     val defaultDominantColor = MaterialTheme.colors.surface
     var dominantColor by remember {
         mutableStateOf(defaultDominantColor)
-
     }
-
     Box(
         modifier = modifier
+            .padding(16.dp)
             .shadow(5.dp, RoundedCornerShape(10.dp))
             .clip(RoundedCornerShape(10.dp))
             .aspectRatio(1f)
@@ -147,27 +197,30 @@ fun PokedexEntry(
             },
         contentAlignment = Center
     ) {
-        Column {
-            CoilImage(
-                request = ImageRequest.Builder(LocalContext.current)
-                    .data(entry.imageUrl)
-                    .target {
-                        viewModel.calcDominantColor(it) { color ->
-                            dominantColor = color
-                        }
-                    }
-                    .build(),
-                contentDescription = entry.pokemonName,
-                fadeIn = true,
-                modifier = Modifier
-                    .size(120.dp)
-                    .align(CenterHorizontally)
-            ) {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colors.primary,
-                    modifier = Modifier.scale(0.5f)
-                )
+        Column(
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
+            val painter = rememberImagePainter(
+                data = entry.imageUrl,
+                builder = {
+                    crossfade(true)
+                },
+            )
+            val state = painter.state
+            if (state is ImagePainter.State.Success) {
+                val drawable = state.result.drawable
+                viewModel.calcDominantColor(drawable) { color ->
+                    dominantColor = color
+                }
             }
+            Image(
+                painter = painter,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .size(90.dp),
+                contentScale = ContentScale.Fit
+            )
             Text(
                 text = entry.pokemonName,
                 fontFamily = RobotoCondensed,
@@ -179,32 +232,26 @@ fun PokedexEntry(
     }
 }
 
+
+
 @Composable
-fun PokedexRow(
-    rowIndex:Int,
-    entries : List<PokedexListEntry>,
-    navController: NavController
-){
+fun RetrySection(
+    error: String,
+    onRetry: () -> Unit
+) {
+
     Column {
-        Row {
-            PokedexEntry(
-                entry = entries[rowIndex * 2],
-                navController = navController,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            if (entries.size >= rowIndex*2+2){
-                PokedexEntry(
-                    entry = entries[rowIndex * 2+1],
-                    navController = navController,
-                    modifier = Modifier.weight(1f)
-                )
-            }else{
-                Spacer(modifier = Modifier.weight(1f))
-            }
+        Text(text = error, color = Color.Red, fontSize = 18.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = { onRetry() },
+            modifier = Modifier
+                .align(CenterHorizontally)
+        ) {
+            Text(text = "Retry")
         }
-        Spacer(modifier = Modifier.height(16.dp))
     }
+
 }
 
 

@@ -1,5 +1,6 @@
 package com.bahoz.pokedex.repository
 
+import android.util.Log
 import com.bahoz.pokedex.data.remote.PokeApi
 import com.bahoz.pokedex.data.remote.responses.Pokemon
 import com.bahoz.pokedex.data.remote.responses.PokemonList
@@ -17,9 +18,13 @@ class PokemonRepository @Inject constructor(
     suspend fun getPokemonList(limit: Int, offset: Int): Resource<PokemonList> {
         val response = try {
             api.getPokemonList(limit = limit, offset = offset)
+
         } catch (e: Exception) {
             return Resource.Error("An unknown error occurred ${e.message}")
+
         }
+        Log.e("Repository", "in successs")
+        Log.e("Repository", response.toString())
         return Resource.Success(response)
     }
 
