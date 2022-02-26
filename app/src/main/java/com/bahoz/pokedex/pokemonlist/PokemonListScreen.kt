@@ -51,7 +51,8 @@ import com.bahoz.pokedex.ui.theme.RobotoCondensed
 
 @Composable
 fun PokemonListScreen(
-    navController: NavController
+    navController: NavController,
+    viewModel: PokemonListViewModel = hiltViewModel()
 ) {
     Surface(
         color = MaterialTheme.colors.background,
@@ -67,13 +68,14 @@ fun PokemonListScreen(
                     .fillMaxWidth()
                     .align(CenterHorizontally)
             )
-
             SearchBar(
                 hint = "Search...",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
-            )
+            ){
+                viewModel.searchPokemonList(it)
+            }
             Spacer(modifier = Modifier.height(16.dp))
             PokemonList(navController = navController)
 
@@ -133,6 +135,7 @@ fun PokemonList(
     val endReached by remember { viewModel.endReached }
     val isLoading by remember { viewModel.isLoading }
     val loadError by remember { viewModel.loadError }
+    val isSearching by remember { viewModel.isSearching }
 
     LazyVerticalGrid(
         cells = GridCells.Fixed(2),
@@ -144,7 +147,7 @@ fun PokemonList(
                 entry = pokemonList[it],
                 navController = navController,
             )
-            if (it >= pokemonList.size - 1 && !endReached) {
+            if (it >= pokemonList.size - 1 && !endReached && !isLoading && !isSearching) {
                 viewModel.loadPokemonPaginated()
             }
         }
